@@ -40,7 +40,8 @@ fastAnnotator <- function(
   pathPraat,
   pathAudio,
   sample = NULL,
-  sampleOrder = NULL
+  sampleOrder = NULL,
+  snippets = FALSE
 ) {
   stopifnot(DBI::dbIsValid(con))
   stopifnot(dir.exists(pathAudio))
@@ -66,7 +67,8 @@ fastAnnotator <- function(
     pathAudio = pathAudio,
     audioTempDir = audioTempDir,
     initialSample = sample,
-    initialSampleOrder = sampleOrder
+    initialSampleOrder = sampleOrder,
+    snippets = snippets
   )
 
   # Run the app

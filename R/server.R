@@ -8,9 +8,216 @@ build_server <- function(
   pathAudio,
   audioTempDir,
   initialSample = NULL,
-  initialSampleOrder = NULL
+  initialSampleOrder = NULL,
+  snippets = FALSE
 ) {
   function(input, output, session) {
+    # Snippets directory and index handling
+    snippetDirName <- paste0(
+      "snippets_",
+      ifelse(!is.null(initialSample), initialSample, "sampleNew")
+    )
+    snippetDir <- file.path(pathAudio, snippetDirName)
+    snippetIndexFile <- file.path(audioTempDir, "snippet_index.rds")
+
+    # If snippets are requested, ensure snippet dir exists and generate/copy snippets
+    if (isTRUE(snippets)) {
+      if (!dir.exists(snippetDir)) {
+        dir.create(snippetDir, recursive = TRUE)
+      }
+
+      # Generate snippets if none exist
+      wavFiles <- list.files(snippetDir, pattern = "\\.wav$", full.names = TRUE)
+      if (length(wavFiles) == 0) {
+        try({
+          sampleName <- ifelse(
+            !is.null(initialSample),
+            initialSample,
+            "sampleNew"
+          )
+
+          tokenRows <- DBI::dbGetQuery(
+            con,
+            glue::glue_sql(
+              "SELECT t.id AS token_id, t.IP_id, f.audio_file,
+                      ts.timevalue AS start_time, te.timevalue AS end_time
+               FROM token t
+               JOIN files f ON t.file_id = f.id
+               JOIN timeline ts ON t.start_timestamp_id = ts.id
+               JOIN timeline te ON t.end_timestamp_id = te.id
+               JOIN subsample_token st ON t.id = st.token_id
+               JOIN subsample s ON st.subsample_id = s.id
+               WHERE s.name = {sampleName}",
+              .con = con
+            )
+          )
+
+          if (nrow(tokenRows) > 0) {
+            # IP snippets: one per IP (query full IP extent from DB, not just sample tokens)
+            uniqueIPIds <- unique(tokenRows$IP_id)
+            ipInfo <- DBI::dbGetQuery(
+              con,
+              glue::glue_sql(
+                "SELECT t.IP_id, f.audio_file,
+                        MIN(ts.timevalue) AS start_time,
+                        MAX(te.timevalue) AS end_time
+                 FROM token t
+                 JOIN files f ON t.file_id = f.id
+                 JOIN timeline ts ON t.start_timestamp_id = ts.id
+                 JOIN timeline te ON t.end_timestamp_id = te.id
+                 WHERE t.IP_id IN ({uniqueIPIds*})
+                 GROUP BY t.IP_id, f.audio_file",
+                .con = con
+              )
+            )
+
+            index <- list()
+
+            # write ip snippets
+            for (i in seq_len(nrow(ipInfo))) {
+              row <- ipInfo[i, ]
+              start <- max(0, row$start_time - 0.3)
+              end <- row$end_time + 0.3
+              src <- paste0(pathAudio, row$audio_file)
+              if (file.exists(src)) {
+                try(
+                  {
+                    snd <- tuneR::readWave(
+                      src,
+                      from = start,
+                      to = end,
+                      units = "seconds"
+                    )
+                    outName <- paste0("ip_", row$IP_id, ".wav")
+                    outPath <- file.path(snippetDir, outName)
+                    tuneR::writeWave(snd, outPath)
+                    index[[length(index) + 1]] <- list(
+                      filename = outName,
+                      type = "ip",
+                      token_id = NA_integer_,
+                      ip_id = row$IP_id,
+                      snippet_start = start
+                    )
+                  },
+                  silent = TRUE
+                )
+              }
+            }
+
+            # write token and transcript snippets
+            defaultRange <- 10
+            for (i in seq_len(nrow(tokenRows))) {
+              tr <- tokenRows[i, ]
+              # token snippet
+              tstart <- max(0, tr$start_time - 0.2)
+              tend <- tr$end_time + 0.2
+              src <- paste0(pathAudio, tr$audio_file)
+              if (file.exists(src)) {
+                try(
+                  {
+                    snd <- tuneR::readWave(
+                      src,
+                      from = tstart,
+                      to = tend,
+                      units = "seconds"
+                    )
+                    outName <- paste0("token_", tr$token_id, ".wav")
+                    outPath <- file.path(snippetDir, outName)
+                    tuneR::writeWave(snd, outPath)
+                    index[[length(index) + 1]] <- list(
+                      filename = outName,
+                      type = "token",
+                      token_id = tr$token_id,
+                      ip_id = tr$IP_id,
+                      snippet_start = tstart
+                    )
+                  },
+                  silent = TRUE
+                )
+              }
+
+              # transcript snippet (around entire IP range)
+              iprows <- tokenRows[tokenRows$IP_id == tr$IP_id, , drop = FALSE]
+              if (nrow(iprows) > 0) {
+                ipStart <- min(iprows$start_time)
+                ipEnd <- max(iprows$end_time)
+                tts <- max(0, ipStart - defaultRange)
+                tte <- ipEnd + defaultRange
+                src <- paste0(pathAudio, tr$audio_file)
+                if (file.exists(src)) {
+                  try(
+                    {
+                      snd <- tuneR::readWave(
+                        src,
+                        from = tts,
+                        to = tte,
+                        units = "seconds"
+                      )
+                      outName <- paste0("transcript_", tr$token_id, ".wav")
+                      outPath <- file.path(snippetDir, outName)
+                      tuneR::writeWave(snd, outPath)
+                      index[[length(index) + 1]] <- list(
+                        filename = outName,
+                        type = "transcript",
+                        token_id = tr$token_id,
+                        ip_id = tr$IP_id,
+                        snippet_start = tts
+                      )
+                    },
+                    silent = TRUE
+                  )
+                }
+              }
+            }
+
+            # save index
+            if (length(index) > 0) {
+              idxdf <- do.call(
+                rbind,
+                lapply(index, function(x) {
+                  as.data.frame(x, stringsAsFactors = FALSE)
+                })
+              )
+              idxdf$token_id <- as.integer(idxdf$token_id)
+              idxdf$ip_id <- as.integer(idxdf$ip_id)
+              idxdf$snippet_start <- as.numeric(idxdf$snippet_start)
+              saveRDS(idxdf, file = file.path(snippetDir, "snippet_index.rds"))
+            }
+          }
+        })
+        wavFiles <- list.files(
+          snippetDir,
+          pattern = "\\.wav$",
+          full.names = TRUE
+        )
+      }
+
+      # copy any snippets and index into audioTempDir for fast serving
+      if (length(wavFiles) > 0) {
+        for (f in wavFiles) {
+          try(
+            file.copy(
+              f,
+              file.path(audioTempDir, basename(f)),
+              overwrite = TRUE
+            ),
+            silent = TRUE
+          )
+        }
+        idxPath <- file.path(snippetDir, "snippet_index.rds")
+        if (file.exists(idxPath)) {
+          try(
+            file.copy(idxPath, snippetIndexFile, overwrite = TRUE),
+            silent = TRUE
+          )
+        }
+      }
+    }
+    # Ensure `js` is available in server environment (shinyjs exposes it)
+    try(
+      js <- shinyjs::js,
+      silent = TRUE
+    )
     # Resource paths for audio
     shiny::addResourcePath("audio", audioTempDir)
 
@@ -381,6 +588,12 @@ build_server <- function(
 
     # Function to create audio file for a token
     createAudioFile <- function(tokenId, prefix = "tmpToken") {
+      # Prefer pre-generated token snippet if present in temp dir
+      snipName <- paste0("token_", tokenId, ".wav")
+      snipPath <- file.path(audioTempDir, snipName)
+      if (file.exists(snipPath)) {
+        return(paste0("audio/", snipName))
+      }
       audioInfo <- DBI::dbGetQuery(
         con,
         glue::glue_sql(
@@ -540,6 +753,20 @@ build_server <- function(
     # Play full IP
     observe({
       req(annotated$item())
+      # Try to use pre-generated IP snippet if present
+      ipRow <- DBI::dbGetQuery(
+        con,
+        glue::glue_sql(
+          "SELECT IP_id FROM token WHERE id = {annotated$item()}",
+          .con = con
+        )
+      )
+      ipId <- ipRow$IP_id[1]
+      ipSnip <- file.path(audioTempDir, paste0("ip_", ipId, ".wav"))
+      if (file.exists(ipSnip)) {
+        js$playAudio(paste0("audio/", basename(ipSnip)))
+        return()
+      }
 
       ipInfo <- DBI::dbGetQuery(
         con,

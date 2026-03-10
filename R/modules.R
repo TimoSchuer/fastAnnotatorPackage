@@ -1323,7 +1323,88 @@ transcriptServer <- function(id, con, item_id, dirAudio, audioTempDir) {
     nameTranscript <- reactive({
       req(audioTrigger())
       trigger <- audioTrigger()
+      # If a snippet index exists in the temp dir, try to use pre-generated transcript snippet
+      idxPath <- file.path(audioTempDir, "snippet_index.rds")
+      if (file.exists(idxPath)) {
+        idx <- tryCatch(readRDS(idxPath), error = function(e) NULL)
+        if (!is.null(idx) && nrow(idx) > 0) {
+          # Prefer transcript snippet for current token
+          curToken <- item_id()
+          row <- idx |>
+            dplyr::filter(type == "transcript" & token_id == curToken)
+          if (nrow(row) == 1) {
+            snipFile <- file.path(audioTempDir, row$filename[1])
+            if (file.exists(snipFile)) {
+              # adjust read window relative to snippet start
+              fromAdj <- trigger$start - row$snippet_start[1]
+              toAdj <- trigger$end - row$snippet_start[1]
+              fromAdj <- max(0, fromAdj)
+              try(
+                {
+                  soundTr <- tuneR::readWave(
+                    snipFile,
+                    from = fromAdj,
+                    to = toAdj,
+                    units = "seconds"
+                  )
+                  sT <- phonTools::makesound(
+                    soundTr@left,
+                    filename = "tmpTranscript",
+                    fs = soundTr@samp.rate
+                  )
+                  fileName <- paste0(
+                    "tmpTranscript",
+                    sample(1000:2000, 1),
+                    ".wav"
+                  )
+                  absolutePath <- file.path(audioTempDir, fileName)
+                  relativeName <- paste0("audio/", fileName)
+                  phonTools::writesound(sT, filename = absolutePath)
+                  return(relativeName)
+                },
+                silent = TRUE
+              )
+            }
+          }
+          # Fallback: use ip snippet if available for this IP
+          rowIp <- idx |> dplyr::filter(type == "ip" & ip_id == trigger$ip)
+          if (nrow(rowIp) == 1) {
+            snipFile <- file.path(audioTempDir, rowIp$filename[1])
+            if (file.exists(snipFile)) {
+              fromAdj <- trigger$start - rowIp$snippet_start[1]
+              toAdj <- trigger$end - rowIp$snippet_start[1]
+              fromAdj <- max(0, fromAdj)
+              try(
+                {
+                  soundTr <- tuneR::readWave(
+                    snipFile,
+                    from = fromAdj,
+                    to = toAdj,
+                    units = "seconds"
+                  )
+                  sT <- phonTools::makesound(
+                    soundTr@left,
+                    filename = "tmpTranscript",
+                    fs = soundTr@samp.rate
+                  )
+                  fileName <- paste0(
+                    "tmpTranscript",
+                    sample(1000:2000, 1),
+                    ".wav"
+                  )
+                  absolutePath <- file.path(audioTempDir, fileName)
+                  relativeName <- paste0("audio/", fileName)
+                  phonTools::writesound(sT, filename = absolutePath)
+                  return(relativeName)
+                },
+                silent = TRUE
+              )
+            }
+          }
+        }
+      }
 
+      # Default behavior: read from original audio file
       soundTr <- paste0(dirAudio, trigger$file) |>
         tuneR::readWave(
           from = trigger$start,
