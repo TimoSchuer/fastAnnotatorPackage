@@ -1,0 +1,28 @@
+Package: fastAnnotator
+Title: Fast Annotation Tool for Linguistic Databases
+Version: 0.1.0
+Authors@R: person("Timo", "Schuer", role = c("aut", "cre"),
+                  email = "timo@example.com")
+Description: A Shiny-based annotation tool for linguistic databases. Provides
+    audio playback, Praat integration, and transcript display for efficient
+    annotation of speech data stored in MariaDB databases.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    shiny,
+    bslib,
+    bsicons,
+    DT,
+    DBI,
+    dplyr,
+    tidyr,
+    readr,
+    howler,
+    shinyjs,
+    phonTools,
+    tuneR,
+    glue,
+    later,
+    rPraat

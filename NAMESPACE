@@ -1,0 +1,59 @@
+export(fastAnnotator)
+import(shiny)
+import(dplyr, except = c(filter, lag))
+importFrom(
+  dplyr,
+  filter,
+  select,
+  mutate,
+  arrange,
+  pull,
+  rename,
+  left_join,
+  bind_rows,
+  first,
+  any_of,
+  summarise,
+  case_when,
+  row_number
+)
+importFrom(tidyr, pivot_wider, crossing)
+importFrom(DBI, dbGetQuery, dbExecute, dbIsValid, dbBegin, dbCommit)
+importFrom(glue, glue_sql)
+importFrom(DT, dataTableOutput, renderDataTable)
+importFrom(shinyjs, useShinyjs, extendShinyjs, hide, addClass, removeClass)
+importFrom(later, later)
+importFrom(tuneR, readWave, writeWave)
+importFrom(phonTools, makesound, writesound)
+importFrom(
+  rPraat,
+  tg.createNewTextGrid,
+  tg.insertNewIntervalTier,
+  tg.insertInterval,
+  tg.write
+)
+importFrom(
+  howler,
+  howlerOutput,
+  renderHowler,
+  howler,
+  howlerPlayPauseButton,
+  howlerStopButton,
+  howlerSeekSlider,
+  howlerSeekTime,
+  stopHowl,
+  seekHowl
+)
+importFrom(readr, write_lines)
+importFrom(
+  bslib,
+  page_sidebar,
+  sidebar,
+  bs_theme,
+  layout_columns,
+  card,
+  card_header,
+  card_body,
+  value_box
+)
+importFrom(bsicons, bs_icon)
