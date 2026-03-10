@@ -894,12 +894,11 @@ build_server <- function(
             normalizePath(winslash = "/", mustWork = FALSE)
           readr::write_lines(praatScript, scriptPath)
 
-          cmd <- paste0(
-            '"',
-            normalizePath(praatExe, winslash = "/"),
-            '" --send "',
-            scriptPath,
-            '"'
+          # Use shell.exec or properly quoted system call
+          cmd <- paste(
+            shQuote(normalizePath(praatExe, winslash = "/", mustWork = FALSE)),
+            "--send",
+            shQuote(scriptPath)
           )
           system(cmd, wait = FALSE)
           return()
@@ -962,12 +961,11 @@ build_server <- function(
         normalizePath(winslash = "/", mustWork = FALSE)
       readr::write_lines(praatScript, scriptPath)
 
-      cmd <- paste0(
-        '"',
-        normalizePath(praatExe, winslash = "/"),
-        '" --send "',
-        scriptPath,
-        '"'
+      # Use shell.exec or properly quoted system call
+      cmd <- paste(
+        shQuote(normalizePath(praatExe, winslash = "/", mustWork = FALSE)),
+        "--send",
+        shQuote(scriptPath)
       )
       system(cmd, wait = FALSE)
     }
