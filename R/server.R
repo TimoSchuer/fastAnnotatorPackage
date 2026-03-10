@@ -846,12 +846,6 @@ build_server <- function(
     openInPraat <- function(tokenId) {
       praatExe <- file.path(pathPraat, "Praat.exe")
 
-      # Create tmp folder for Praat files
-      praatTmpDir <- file.path(pathPraat, "tmp")
-      if (!dir.exists(praatTmpDir)) {
-        dir.create(praatTmpDir, recursive = TRUE)
-      }
-
       # Get IP_id for this token
       ipRow <- DBI::dbGetQuery(
         con,
@@ -869,12 +863,12 @@ build_server <- function(
           # Read snippet to create TextGrid
           sound <- tuneR::readWave(ipSnip)
 
-          tmpAudioPath <- file.path(praatTmpDir, "tmpPraat.wav") |>
+          tmpAudioPath <- file.path(pathPraat, "tmpPraat.wav") |>
             normalizePath(winslash = "/", mustWork = FALSE)
-          tmpTextGridPath <- file.path(praatTmpDir, "tmpPraat.TextGrid") |>
+          tmpTextGridPath <- file.path(pathPraat, "tmpPraat.TextGrid") |>
             normalizePath(winslash = "/", mustWork = FALSE)
 
-          # Copy snippet to tmp location
+          # Copy snippet to praat folder
           file.copy(ipSnip, tmpAudioPath, overwrite = TRUE)
 
           tg <- createTextGrid(tokenId, sound)
@@ -890,17 +884,19 @@ build_server <- function(
             'View & Edit'
           )
 
-          scriptPath <- file.path(praatTmpDir, "openFile.praat") |>
+          scriptPath <- file.path(pathPraat, "openFile.praat") |>
             normalizePath(winslash = "/", mustWork = FALSE)
           readr::write_lines(praatScript, scriptPath)
 
-          # Use system2 to avoid path conversion issues
-          praatExePath <- file.path(pathPraat, "Praat.exe")
-          system2(
-            command = praatExePath,
-            args = c("--send", scriptPath),
-            wait = FALSE
+          # Use same command format that works
+          cmd <- paste0(
+            '"',
+            normalizePath(praatExe, winslash = "/"),
+            '" --send "',
+            scriptPath,
+            '"'
           )
+          system(cmd, wait = FALSE)
           return()
         }
       }
@@ -937,9 +933,9 @@ build_server <- function(
         units = "seconds"
       )
 
-      tmpAudioPath <- file.path(praatTmpDir, "tmpPraat.wav") |>
+      tmpAudioPath <- file.path(pathPraat, "tmpPraat.wav") |>
         normalizePath(winslash = "/", mustWork = FALSE)
-      tmpTextGridPath <- file.path(praatTmpDir, "tmpPraat.TextGrid") |>
+      tmpTextGridPath <- file.path(pathPraat, "tmpPraat.TextGrid") |>
         normalizePath(winslash = "/", mustWork = FALSE)
 
       tuneR::writeWave(sound, tmpAudioPath)
@@ -957,17 +953,19 @@ build_server <- function(
         'View & Edit'
       )
 
-      scriptPath <- file.path(praatTmpDir, "openFile.praat") |>
+      scriptPath <- file.path(pathPraat, "openFile.praat") |>
         normalizePath(winslash = "/", mustWork = FALSE)
       readr::write_lines(praatScript, scriptPath)
 
-      # Use system2 to avoid path conversion issues
-      praatExePath <- file.path(pathPraat, "Praat.exe")
-      system2(
-        command = praatExePath,
-        args = c("--send", scriptPath),
-        wait = FALSE
+      # Use same command format that works
+      cmd <- paste0(
+        '"',
+        normalizePath(praatExe, winslash = "/"),
+        '" --send "',
+        scriptPath,
+        '"'
       )
+      system(cmd, wait = FALSE)
     }
 
     observe({
