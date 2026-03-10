@@ -894,15 +894,13 @@ build_server <- function(
             normalizePath(winslash = "/", mustWork = FALSE)
           readr::write_lines(praatScript, scriptPath)
 
-          # Use shell.exec or properly quoted system call
-          # Don't normalize praatExe to avoid 8.3 DOS paths
+          # Use system2 to avoid path conversion issues
           praatExePath <- file.path(pathPraat, "Praat.exe")
-          cmd <- paste(
-            shQuote(praatExePath),
-            "--send",
-            shQuote(scriptPath)
+          system2(
+            command = praatExePath,
+            args = c("--send", scriptPath),
+            wait = FALSE
           )
-          system(cmd, wait = FALSE)
           return()
         }
       }
@@ -963,15 +961,13 @@ build_server <- function(
         normalizePath(winslash = "/", mustWork = FALSE)
       readr::write_lines(praatScript, scriptPath)
 
-      # Use shell.exec or properly quoted system call
-      # Don't normalize praatExe to avoid 8.3 DOS paths
+      # Use system2 to avoid path conversion issues
       praatExePath <- file.path(pathPraat, "Praat.exe")
-      cmd <- paste(
-        shQuote(praatExePath),
-        "--send",
-        shQuote(scriptPath)
+      system2(
+        command = praatExePath,
+        args = c("--send", scriptPath),
+        wait = FALSE
       )
-      system(cmd, wait = FALSE)
     }
 
     observe({
