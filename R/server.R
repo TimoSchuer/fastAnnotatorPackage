@@ -191,11 +191,6 @@ build_server <- function(
         )
       }
     }
-    # Ensure `js` is available in server environment (shinyjs exposes it)
-    try(
-      js <- shinyjs::js,
-      silent = TRUE
-    )
     # Resource paths for audio
     shiny::addResourcePath("audio", audioTempDir)
     if (isTRUE(snippets) && dir.exists(snippetDir)) {
@@ -729,7 +724,7 @@ build_server <- function(
     # Audio playback ----------------------------------------------------------
     observe({
       req(currentAudioName())
-      js$playAudio(currentAudioName())
+      shinyjs::js$playAudio(currentAudioName())
     }) |>
       bindEvent(input$playToken)
 
@@ -748,7 +743,7 @@ build_server <- function(
       if (isTRUE(snippets)) {
         ipSnip <- file.path(snippetDir, paste0("ip_", ipId, ".wav"))
         if (file.exists(ipSnip)) {
-          js$playAudio(paste0("snippets/", basename(ipSnip)))
+          shinyjs::js$playAudio(paste0("snippets/", basename(ipSnip)))
           return()
         }
       }
@@ -787,7 +782,7 @@ build_server <- function(
       relativeName <- paste0("audio/", fileName)
       phonTools::writesound(s, filename = absolutePath)
 
-      js$playAudio(relativeName)
+      shinyjs::js$playAudio(relativeName)
     }) |>
       bindEvent(input$playIP)
 
