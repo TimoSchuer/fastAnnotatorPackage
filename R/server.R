@@ -887,16 +887,16 @@ build_server <- function(
           scriptPath <- file.path(pathPraat, "openFile.praat") |>
             normalizePath(winslash = "/", mustWork = FALSE)
           readr::write_lines(praatScript, scriptPath)
-          print(praatExe)
-          print(normalizePath(praatExe, winslash = "/"))
+
           # Use same command format that works
           cmd <- paste0(
             '"',
-            normalizePath(praatExe, winslash = "/"),
+            praatExe,
             '" --send "',
             scriptPath,
             '"'
           )
+          print(paste("cmd:", cmd))
           system(cmd, wait = FALSE)
           return()
         }
@@ -957,17 +957,16 @@ build_server <- function(
       scriptPath <- file.path(pathPraat, "openFile.praat") |>
         normalizePath(winslash = "/", mustWork = FALSE)
       readr::write_lines(praatScript, scriptPath)
-      print("sencondpart:")
-      print(praatExe)
-      print(normalizePath(praatExe, winslash = "/"))
+
       # Use same command format that works
       cmd <- paste0(
         '"',
-        normalizePath(praatExe, winslash = "/"),
+        praatExe,
         '" --send "',
         scriptPath,
         '"'
       )
+      print(paste("2 cmd:", cmd))
       system(cmd, wait = FALSE)
     }
 
