@@ -212,9 +212,10 @@ build_server <- function(
       }
 
       # Clean up praat temp files
-      if (dir.exists(pathPraat)) {
+      praatTmpDir <- file.path(pathPraat, "tmp")
+      if (dir.exists(praatTmpDir)) {
         praatTmpFiles <- list.files(
-          pathPraat,
+          praatTmpDir,
           pattern = "^(tmpPraat|openFile)\\.(wav|TextGrid|praat)$",
           full.names = TRUE
         )
@@ -237,9 +238,10 @@ build_server <- function(
         }
       }
 
-      if (dir.exists(pathPraat)) {
+      praatTmpDir <- file.path(pathPraat, "tmp")
+      if (dir.exists(praatTmpDir)) {
         praatTmpFiles <- list.files(
-          pathPraat,
+          praatTmpDir,
           pattern = "^(tmpPraat|openFile)\\.(wav|TextGrid|praat)$",
           full.names = TRUE
         )
@@ -844,6 +846,67 @@ build_server <- function(
     openInPraat <- function(tokenId) {
       praatExe <- file.path(pathPraat, "Praat.exe")
 
+      # Create tmp folder for Praat files
+      praatTmpDir <- file.path(pathPraat, "tmp")
+      if (!dir.exists(praatTmpDir)) {
+        dir.create(praatTmpDir, recursive = TRUE)
+      }
+
+      # Get IP_id for this token
+      ipRow <- DBI::dbGetQuery(
+        con,
+        glue::glue_sql(
+          "SELECT IP_id FROM token WHERE id = {tokenId}",
+          .con = con
+        )
+      )
+      ipId <- ipRow$IP_id[1]
+
+      # Try to use snippet if available
+      if (isTRUE(snippets)) {
+        ipSnip <- file.path(snippetDir, paste0("ip_", ipId, ".wav"))
+        if (file.exists(ipSnip)) {
+          # Read snippet to create TextGrid
+          sound <- tuneR::readWave(ipSnip)
+
+          tmpAudioPath <- file.path(praatTmpDir, "tmpPraat.wav") |>
+            normalizePath(winslash = "/", mustWork = FALSE)
+          tmpTextGridPath <- file.path(praatTmpDir, "tmpPraat.TextGrid") |>
+            normalizePath(winslash = "/", mustWork = FALSE)
+
+          # Copy snippet to tmp location
+          file.copy(ipSnip, tmpAudioPath, overwrite = TRUE)
+
+          tg <- createTextGrid(tokenId, sound)
+          if (!is.null(tg)) {
+            rPraat::tg.write(tg, fileNameTextGrid = tmpTextGridPath)
+          }
+
+          praatScript <- c(
+            paste0('Read from file: "', tmpAudioPath, '"'),
+            paste0('Read from file: "', tmpTextGridPath, '"'),
+            'selectObject: "Sound tmpPraat"',
+            'plusObject: "TextGrid tmpPraat"',
+            'View & Edit'
+          )
+
+          scriptPath <- file.path(praatTmpDir, "openFile.praat") |>
+            normalizePath(winslash = "/", mustWork = FALSE)
+          readr::write_lines(praatScript, scriptPath)
+
+          cmd <- paste0(
+            '"',
+            normalizePath(praatExe, winslash = "/"),
+            '" --send "',
+            scriptPath,
+            '"'
+          )
+          system(cmd, wait = FALSE)
+          return()
+        }
+      }
+
+      # Fallback: read from original audio
       ipInfo <- DBI::dbGetQuery(
         con,
         glue::glue_sql(
@@ -854,7 +917,7 @@ build_server <- function(
            JOIN files f ON t.file_id = f.id
            JOIN timeline ts ON t.start_timestamp_id = ts.id
            JOIN timeline te ON t.end_timestamp_id = te.id
-           WHERE t.IP_id = (SELECT IP_id FROM token WHERE id = {tokenId})
+           WHERE t.IP_id = {ipId}
            GROUP BY f.audio_file",
           .con = con
         )
@@ -875,9 +938,9 @@ build_server <- function(
         units = "seconds"
       )
 
-      tmpAudioPath <- file.path(pathPraat, "tmpPraat.wav") |>
+      tmpAudioPath <- file.path(praatTmpDir, "tmpPraat.wav") |>
         normalizePath(winslash = "/", mustWork = FALSE)
-      tmpTextGridPath <- file.path(pathPraat, "tmpPraat.TextGrid") |>
+      tmpTextGridPath <- file.path(praatTmpDir, "tmpPraat.TextGrid") |>
         normalizePath(winslash = "/", mustWork = FALSE)
 
       tuneR::writeWave(sound, tmpAudioPath)
@@ -895,7 +958,7 @@ build_server <- function(
         'View & Edit'
       )
 
-      scriptPath <- file.path(pathPraat, "openFile.praat") |>
+      scriptPath <- file.path(praatTmpDir, "openFile.praat") |>
         normalizePath(winslash = "/", mustWork = FALSE)
       readr::write_lines(praatScript, scriptPath)
 
