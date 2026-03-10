@@ -895,8 +895,10 @@ build_server <- function(
           readr::write_lines(praatScript, scriptPath)
 
           # Use shell.exec or properly quoted system call
+          # Don't normalize praatExe to avoid 8.3 DOS paths
+          praatExePath <- file.path(pathPraat, "Praat.exe")
           cmd <- paste(
-            shQuote(normalizePath(praatExe, winslash = "/", mustWork = FALSE)),
+            shQuote(praatExePath),
             "--send",
             shQuote(scriptPath)
           )
@@ -962,8 +964,10 @@ build_server <- function(
       readr::write_lines(praatScript, scriptPath)
 
       # Use shell.exec or properly quoted system call
+      # Don't normalize praatExe to avoid 8.3 DOS paths
+      praatExePath <- file.path(pathPraat, "Praat.exe")
       cmd <- paste(
-        shQuote(normalizePath(praatExe, winslash = "/", mustWork = FALSE)),
+        shQuote(praatExePath),
         "--send",
         shQuote(scriptPath)
       )
