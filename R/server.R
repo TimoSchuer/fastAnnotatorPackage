@@ -18,9 +18,8 @@ build_server <- function(
       ifelse(!is.null(initialSample), initialSample, "sampleNew")
     )
     snippetDir <- file.path(pathAudio, snippetDirName)
-    snippetIndexFile <- file.path(audioTempDir, "snippet_index.rds")
 
-    # If snippets are requested, ensure snippet dir exists and generate/copy snippets
+    # If snippets are requested, ensure snippet dir exists and generate snippets
     if (isTRUE(snippets)) {
       if (!dir.exists(snippetDir)) {
         dir.create(snippetDir, recursive = TRUE)
@@ -191,27 +190,6 @@ build_server <- function(
           full.names = TRUE
         )
       }
-
-      # copy any snippets and index into audioTempDir for fast serving
-      if (length(wavFiles) > 0) {
-        for (f in wavFiles) {
-          try(
-            file.copy(
-              f,
-              file.path(audioTempDir, basename(f)),
-              overwrite = TRUE
-            ),
-            silent = TRUE
-          )
-        }
-        idxPath <- file.path(snippetDir, "snippet_index.rds")
-        if (file.exists(idxPath)) {
-          try(
-            file.copy(idxPath, snippetIndexFile, overwrite = TRUE),
-            silent = TRUE
-          )
-        }
-      }
     }
     # Ensure `js` is available in server environment (shinyjs exposes it)
     try(
@@ -220,6 +198,9 @@ build_server <- function(
     )
     # Resource paths for audio
     shiny::addResourcePath("audio", audioTempDir)
+    if (isTRUE(snippets) && dir.exists(snippetDir)) {
+      shiny::addResourcePath("snippets", snippetDir)
+    }
 
     # Cleanup on stop
     shiny::onStop(function() {
@@ -588,11 +569,13 @@ build_server <- function(
 
     # Function to create audio file for a token
     createAudioFile <- function(tokenId, prefix = "tmpToken") {
-      # Prefer pre-generated token snippet if present in temp dir
-      snipName <- paste0("token_", tokenId, ".wav")
-      snipPath <- file.path(audioTempDir, snipName)
-      if (file.exists(snipPath)) {
-        return(paste0("audio/", snipName))
+      # Prefer pre-generated token snippet if present in snippet dir
+      if (isTRUE(snippets)) {
+        snipName <- paste0("token_", tokenId, ".wav")
+        snipPath <- file.path(snippetDir, snipName)
+        if (file.exists(snipPath)) {
+          return(paste0("snippets/", snipName))
+        }
       }
       audioInfo <- DBI::dbGetQuery(
         con,
@@ -762,10 +745,12 @@ build_server <- function(
         )
       )
       ipId <- ipRow$IP_id[1]
-      ipSnip <- file.path(audioTempDir, paste0("ip_", ipId, ".wav"))
-      if (file.exists(ipSnip)) {
-        js$playAudio(paste0("audio/", basename(ipSnip)))
-        return()
+      if (isTRUE(snippets)) {
+        ipSnip <- file.path(snippetDir, paste0("ip_", ipId, ".wav"))
+        if (file.exists(ipSnip)) {
+          js$playAudio(paste0("snippets/", basename(ipSnip)))
+          return()
+        }
       }
 
       ipInfo <- DBI::dbGetQuery(
@@ -941,7 +926,8 @@ build_server <- function(
       con = con,
       item_id = reactive(annotated$item()),
       dirAudio = pathAudio,
-      audioTempDir = audioTempDir
+      audioTempDir = audioTempDir,
+      snippetDir = if (isTRUE(snippets)) snippetDir else NULL
     )
   }
 }
